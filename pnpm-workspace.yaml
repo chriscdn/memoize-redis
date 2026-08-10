@@ -1,0 +1,6 @@
+allowBuilds:
+  esbuild: true
+
+minimumReleaseAgeExclude:
+  - "@chriscdn/*"
+  - '@rolldown/binding-android-arm64@1.2.2'

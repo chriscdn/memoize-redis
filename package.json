@@ -1,0 +1,41 @@
+{
+  "name": "@chriscdn/memoize-redis",
+  "version": "0.0.1",
+  "description": "Memoize asynchronous functions in Redis.",
+  "repository": "https://github.com/chriscdn/memoize-redis",
+  "author": "Christopher Meyer <chris@schwiiz.org>",
+  "license": "MIT",
+  "type": "module",
+  "types": "./lib/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.mts",
+      "import": "./lib/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "watch": "tsdown --watch",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@chriscdn/duration": "^2.0.0",
+    "@chriscdn/promise-semaphore": "^4.0.0",
+    "@chriscdn/type-guards": "^0.0.2"
+  },
+  "peerDependencies": {
+    "redis": "^6.0.0"
+  },
+  "devDependencies": {
+    "@tsconfig/strictest": "^2.0.8",
+    "@types/node": "^26.2.0",
+    "redis": "^6.2.0",
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  },
+  "files": [
+    "lib"
+  ],
+  "sideEffects": false
+}
