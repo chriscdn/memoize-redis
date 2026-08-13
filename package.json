@@ -29,7 +29,7 @@
   "devDependencies": {
     "@tsconfig/strictest": "^2.0.8",
     "@types/node": "^26.2.0",
-    "redis": "^6.2.0",
+    "redis": "^6.2.1",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"

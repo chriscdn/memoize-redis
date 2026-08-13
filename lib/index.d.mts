@@ -15,6 +15,7 @@ declare const createRedisMemoizer: (redisClient: RedisClientType) => <Args exten
   (...args: Args): Promise<Return>;
   clear: () => Promise<number>;
   delete: (...args: Args) => Promise<void>;
+  ttl: (...args: Args) => Promise<number>;
 };
 //#endregion
 export { createRedisMemoizer };

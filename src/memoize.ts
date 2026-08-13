@@ -1,6 +1,6 @@
 import { Semaphore } from "@chriscdn/promise-semaphore";
 import type { RedisClientType } from "redis";
-import { isDefined, isUndefined } from "@chriscdn/type-guards";
+import { isDefined, isNumber, isUndefined } from "@chriscdn/type-guards";
 import { Duration } from "@chriscdn/duration";
 
 // type CacheLike<K, V> = Pick<
@@ -104,9 +104,25 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
       semaphore.release(skey);
     }
   };
-  // memoizedFunction.expiresIn = (...args: Args) =>
-  //   cache.expiresIn(resolver(...args));
-  // memoizedFunction.has = (...args: Args) => cache.has(resolver(...args));
+
+  /**
+   * Returns the cache TTL in ms.
+   *
+   * @param args
+   * @returns
+   */
+  memoizedFunction.ttl = async (...args: Args) => {
+    const skey = resolver(...args);
+
+    // Returns a list which contains for each field in the request: - `-2` if
+    // the field does not exist, or if the key does not exist. - `-1` if the
+    // field exists but has no associated expire time. - A positive integer
+    // representing the TTL in seconds if the field has an associated expiration
+    // time.
+    const ttls = (await redisClient.hpTTL(redisKey, skey)) ?? [];
+
+    return isNumber(ttls[0]) ? ttls[0] : -1;
+  };
 
   return memoizedFunction;
 };
