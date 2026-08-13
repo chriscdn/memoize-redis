@@ -1,7 +1,7 @@
 import { Semaphore } from "@chriscdn/promise-semaphore";
 import type { RedisClientType } from "redis";
 import { isDefined, isNumber, isUndefined } from "@chriscdn/type-guards";
-import { Duration } from "@chriscdn/duration";
+
 
 // type CacheLike<K, V> = Pick<
 //   QuickLRU<K, V>,
@@ -69,16 +69,10 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
         value = await cb(...args);
 
         if (shouldCache(value, skey)) {
-          const maxAge = ttl(value, skey);
-
           await redisClient
             .multi()
             .hSet(redisKey, skey, JSON.stringify(value))
-            .hExpire(
-              redisKey,
-              skey,
-              Duration.toSeconds({ milliseconds: maxAge }),
-            )
+            .hpExpire(redisKey, skey, ttl(value, skey))
             .exec();
         }
       }

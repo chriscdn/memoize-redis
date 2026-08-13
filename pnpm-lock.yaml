@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@chriscdn/duration':
-        specifier: ^2.0.0
-        version: 2.0.0
       '@chriscdn/promise-semaphore':
         specifier: ^4.0.0
         version: 4.0.0
@@ -38,9 +35,6 @@ importers:
         version: 4.1.10(@types/node@26.2.0)(vite@8.0.13(@types/node@26.2.0)(esbuild@0.27.7))
 
 packages:
-
-  '@chriscdn/duration@2.0.0':
-    resolution: {integrity: sha512-DifiZGhxZNcULd4duxHiOkZtUs5vfTePJ1sJOwyPx/BkjtP/NU3J0OnMrHgRKkCH1pIsD/+2ztho/agLeeWSeg==}
 
   '@chriscdn/promise-semaphore@4.0.0':
     resolution: {integrity: sha512-vMFXvksQF3zy3e0r5hL8FUMhajcbSd7HJOcGI4CLYQgjd5znoqHIfzYCYVlw0mCYUjzqk5NTIp7mY7m+IB3+uQ==}
@@ -1173,8 +1167,6 @@ packages:
     resolution: {integrity: sha512-KPQcpF9aj77ywlJBIkQWCQ9DObdxnCA8AJdUOmA5CZZx042Xt4+dvbQmPJfWxF3E+KG5dVAZ2fBKuDJ8VsKWgA==}
 
 snapshots:
-
-  '@chriscdn/duration@2.0.0': {}
 
   '@chriscdn/promise-semaphore@4.0.0': {}
 

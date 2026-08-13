@@ -19,7 +19,6 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@chriscdn/duration": "^2.0.0",
     "@chriscdn/promise-semaphore": "^4.0.0",
     "@chriscdn/type-guards": "^0.0.2"
   },
