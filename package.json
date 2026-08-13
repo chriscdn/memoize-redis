@@ -1,6 +1,6 @@
 {
   "name": "@chriscdn/memoize-redis",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Memoize asynchronous functions in Redis.",
   "repository": "https://github.com/chriscdn/memoize-redis",
   "author": "Christopher Meyer <chris@schwiiz.org>",
