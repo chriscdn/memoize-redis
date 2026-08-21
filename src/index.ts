@@ -1,5 +1,9 @@
 import type { RedisClientType } from "redis";
-import { MemoizeAsyncRedis, MemoizeAsyncRedisOptions } from "./memoize";
+import {
+  isMemoizedAsyncRedis,
+  MemoizeAsyncRedis,
+  MemoizeAsyncRedisOptions,
+} from "./memoize";
 
 type Callback<Args extends unknown[], Return> = (
   ...args: Args
@@ -18,4 +22,4 @@ const createRedisMemoizer =
   ) =>
     MemoizeAsyncRedis(cb, { ...options, redisClient });
 
-export { createRedisMemoizer };
+export { createRedisMemoizer, isMemoizedAsyncRedis };

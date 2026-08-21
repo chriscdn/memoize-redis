@@ -1,24 +1,252 @@
 # @chriscdn/memoize-redis
 
-Memoize asynchronous functions in Redis.
+A small TypeScript utility for memoizing asynchronous functions using Redis hashes.
 
-> This package is in development.
+It provides:
 
-<!-- ## Installing
+- Redis backed caching
+- Per entry TTLs
+- Custom cache key resolution
+- Conditional caching via `ttl`
+- In-flight request deduplication
+- Cache inspection and deletion
+- Explicit cache refresh, including background refresh
+- Graceful operation when Redis is unavailable
 
-Using npm:
+## Installation
 
 ```bash
 npm install @chriscdn/memoize-redis
 ```
 
-Using yarn:
+The package has a peer dependency on [`redis`](https://www.npmjs.com/package/redis) package v6 or greater.
 
-```bash
-yarn add @chriscdn/memoize-redis
+## Basic usage
+
+Create a memoizer from an existing Redis client:
+
+```ts
+import { createClient } from "redis";
+import { createRedisMemoizer } from "@chriscdn/memoize-redis";
+
+const redisClient = createClient({
+  url: process.env.REDIS_URL,
+});
+
+// Attach an error listener before connecting. The redis client emits
+// an "error" event on connection issues, and Node will crash on an
+// unhandled "error" event if no listener is registered.
+redisClient.on("error", (error) => {
+  console.error("Redis error", error);
+});
+
+await redisClient.connect();
+
+const memoize = createRedisMemoizer(redisClient);
+
+const getUser = memoize(
+  async (id: string) => {
+    return fetchUserFromDatabase(id);
+  },
+  {
+    redisKey: "users",
+    ttl: (user) => 60_000,
+  },
+);
+
+const user = await getUser("123");
 ```
 
-## Usage -->
+## Options
+
+### `redisKey` (required)
+
+The Redis hash used to store the cached values.
+
+```ts
+{
+  redisKey: "users";
+}
+```
+
+Different memoized functions can use different Redis keys.
+
+### `ttl` (required)
+
+A function that determines how long the returned value should remain cached.
+
+The value is specified in milliseconds.
+
+```ts
+{
+  ttl: (value, key) => 60_000;
+}
+```
+
+The callback receives the resolved value and cache key. Returning `0` or a negative value prevents the value from being cached.
+
+This also makes it possible to calculate the TTL from the returned value:
+
+```ts
+{
+  ttl: (value) => value.expiresAt - Date.now();
+}
+```
+
+### `resolver`
+
+By default, the arguments are serialized using `JSON.stringify`:
+
+```ts
+resolver: (...args) => JSON.stringify(args);
+```
+
+A custom resolver can be supplied when a different cache key is required:
+
+```ts
+const getUser = memoize(
+  async (id: string, includeDetails: boolean) => {
+    return fetchUser(id, includeDetails);
+  },
+  {
+    redisKey: "users",
+    resolver: (id, includeDetails) =>
+      `${id}:${includeDetails ? "details" : "basic"}`,
+    ttl: () => 60_000,
+  },
+);
+```
+
+The resolver must return a string.
+
+## Cache behavior
+
+- When the memoized function is called, it first checks Redis.
+- If a cached value exists, it is deserialized and returned without calling the original function.
+- If there is no cached value, the original function is called and its result may be cached according to `ttl`. Return `0` (or a negative number) from `ttl` to skip caching for that value.
+- If Redis is unavailable, the original function is called normally and the result is returned without caching.
+- If the resolved value is `undefined`, it is not cached, regardless of the value returned by `ttl`. A value of `null` is cached normally.
+
+## In-flight request deduplication
+
+Concurrent requests for the same cache key are deduplicated within the current process.
+
+For example:
+
+```ts
+const [a, b, c] = await Promise.all([
+  getUser("123"),
+  getUser("123"),
+  getUser("123"),
+]);
+```
+
+If `"123"` is not already cached, the underlying function is only executed once.
+
+All three callers receive the same resulting promise.
+
+This deduplication is local to the current process. It does not provide distributed request locking between multiple application instances.
+
+## Methods
+
+The memoized function provides several additional methods.
+
+### `clear()`
+
+Delete the Redis hash.
+
+```ts
+await getUser.clear();
+```
+
+### `has(...args)`
+
+Checks whether a cache entry exists.
+
+```ts
+const exists = await getUser.has("123");
+```
+
+Returns `true` or `false` accordingly, or `null` if Redis is not available.
+
+### `delete(...args)`
+
+Deletes a single cache entry.
+
+```ts
+await getUser.delete("123");
+```
+
+### `ttl(...args)`
+
+Returns the remaining TTL for a cache entry in milliseconds.
+
+```ts
+const remaining = await getUser.ttl("123");
+```
+
+The return values are:
+
+| Value | Meaning                                                                    |
+| ----- | -------------------------------------------------------------------------- |
+| >=0   | entry TTL in milliseconds                                                  |
+| -1    | entry exists without an expiration (should never happen with this package) |
+| -2    | entry does not exist                                                       |
+| -3    | Redis is unavailable                                                       |
+
+### `refresh(...args)`
+
+Forces the underlying function to execute instead of using the existing cached value.
+
+```ts
+await getUser.refresh("123");
+```
+
+The resulting value is processed using the normal caching rules, including `ttl`.
+
+If another refresh or cache miss for the same key is already in progress, the existing in-flight request is reused.
+
+This can also be called without `await` to do a background refresh.
+
+## Detecting memoized functions
+
+The package exports `isMemoizedAsyncRedis`:
+
+```ts
+import { isMemoizedAsyncRedis } from "@chriscdn/memoize-redis";
+
+if (isMemoizedAsyncRedis(value)) {
+  await value.clear();
+}
+```
+
+This can be useful when working with dynamically configured functions.
+
+## Redis availability
+
+The memoizer checks `redisClient.isReady` before performing cache operations.
+
+When Redis is unavailable:
+
+- Cache reads are skipped
+- Cache writes are skipped
+- Cache deletion is skipped
+- Cache inspection returns null where applicable
+- The underlying function still executes
+
+Redis connection errors are therefore not required for normal function execution to succeed.
+
+The Redis client itself is responsible for establishing and maintaining its connection, including registering an `"error"` listener as shown in [Basic usage](#basic-usage).
+
+## Serialization
+
+Cached values are serialized using `JSON.stringify` and restored using `JSON.parse`.
+
+Consequently, values should be JSON serializable.
+
+Types such as `Date`, `Map`, `Set`, `BigInt`, class instances, and `undefined` do not preserve their original JavaScript representation through this serialization process.
+
+If a cached value contains invalid JSON, the entry is removed from Redis and the underlying function is executed again.
 
 ## License
 

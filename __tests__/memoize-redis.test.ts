@@ -1,218 +1,98 @@
-import { describe, expect, it } from "vitest";
-import { Memoize, MemoizeAsync } from "../src";
+import { describe, expect, test } from "vitest";
+import { createRedisMemoizer } from "../src";
+import { createClient } from "redis";
 
-let addSyncCount = 0;
-let addAsyncCount = 0;
+const redis = createClient({ url: "redis://localhost:6379" });
+const MemoizeRedis = createRedisMemoizer(redis);
 
-const add = (x: number, y: number) => {
-  addSyncCount += 1;
-  return x + y;
-};
-
-const addAsync = async (x: number, y: number) => {
-  addAsyncCount += 1;
-  return x + y;
-};
-
-const _asyncThrowError = MemoizeAsync(async (x: number, y: number) => {
-  addAsyncCount += 1;
-  throw new Error("Boom!");
-  return x + y;
-});
-
-const asyncThrowError = MemoizeAsync(async (x: number, y: number) => {
-  try {
-    await _asyncThrowError(x, y);
-  } catch {
-    return -1;
-  }
-});
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe("Memoization", () => {
-  it("sync", async () => {
-    const addCached = Memoize(add);
+  let callCount = 0;
 
-    expect(addCached(1, 2)).toBe(3);
-    expect(addCached(1, 2)).toBe(3);
-    expect(addCached(1, 2)).toBe(3);
-    expect(addCached(1, 2)).toBe(3);
-    expect(addCached(1, 2)).toBe(3);
+  const m_add = MemoizeRedis(
+    async (a: number, b: number) => {
+      callCount = callCount + 1;
+      return a + b;
+    },
+    {
+      redisKey: "MemoizeRedisTest",
+      resolver: (a, b) => JSON.stringify([a, b].toSorted()),
+      ttl: () => 200,
+    },
+  );
 
-    // different key here
-    expect(addCached(2, 1)).toBe(3);
-    expect(addSyncCount).toBe(2);
+  test("redis-offline", async () => {
+    expect(m_add.ttl(1, 2)).resolves.toBe(-3);
+    // with redis offline, it should still resolve
+    expect(callCount).toBe(0);
+    expect(m_add(1, 2)).resolves.toBe(3);
+    expect(callCount).toBe(1);
   });
 
-  it("async", async () => {
-    const addCachedAsync = MemoizeAsync(addAsync);
-
-    await Promise.all([
-      addCachedAsync(1, 2).then((value) => expect(value).toBe(3)),
-      addCachedAsync(1, 2).then((value) => expect(value).toBe(3)),
-      addCachedAsync(1, 2).then((value) => expect(value).toBe(3)),
-      addCachedAsync(1, 2).then((value) => expect(value).toBe(3)),
-
-      // different key here
-      addCachedAsync(2, 1).then((value) => expect(value).toBe(3)),
-    ]);
-
-    expect(addAsyncCount).toBe(2);
-    expect(addCachedAsync.cache.size).toBe(2);
+  test("addition", async () => {
+    await redis.connect();
+    await expect(m_add(1, 2)).resolves.toBe(3);
+    await expect(m_add.has(2, 1)).resolves.toBe(true);
+    await pause(500);
+    await expect(m_add.has(2, 1)).resolves.toBe(false);
   });
 
-  it("resolver", () => {
-    // This its the resolver function to ensure the same value is returned for
-    // the same key.
-
-    const addCachedSameKey = Memoize(add, { resolver: (x, y) => "key" });
-
-    expect(addCachedSameKey(5, 7)).toBe(12);
-    expect(addCachedSameKey(1, 1)).toBe(12);
-    expect(addCachedSameKey(5, 1)).toBe(12);
+  test("clear", async () => {
+    await expect(m_add(1, 2)).resolves.toBe(3);
+    await expect(m_add.has(2, 1)).resolves.toBe(true);
+    await m_add.clear();
+    await expect(m_add.has(2, 1)).resolves.toBe(false);
   });
 
-  it("async error", async () => {
-    expect(await asyncThrowError(4, 3)).toBe(-1);
+  test("ttl & delete", async () => {
+    await expect(m_add(1, 2)).resolves.toBe(3);
+    await expect(m_add.ttl(1, 2)).resolves.toBeGreaterThan(190);
+    await m_add.delete(1, 2);
+    await expect(m_add.has(1, 2)).resolves.toBe(false);
   });
 });
 
-describe("Memoization of Class methods", () => {
-  class AddClass {
-    count: number = 0;
+describe("Background Refresh", () => {
+  let callCount = 0;
 
-    constructor() {
-      this.add = Memoize(this.add.bind(this));
-    }
+  const m_add_pause_150 = MemoizeRedis(
+    async (a: number, b: number) => {
+      await pause(50);
+      callCount = callCount + 1;
+      return a + b;
+    },
+    {
+      redisKey: "MemoizeRedisTest100",
+      resolver: (a, b) => JSON.stringify([a, b].toSorted()),
+      ttl: () => 150,
+    },
+  );
 
-    add(x: number, y: number) {
-      this.count += 1;
-      return x + y;
-    }
-  }
-
-  it("Test1", () => {
-    const obj = new AddClass();
-
-    expect(obj.count).toBe(0);
-    expect(obj.add(1, 2)).toBe(3);
-    expect(obj.count).toBe(1);
-    expect(obj.add(1, 2)).toBe(3);
-    expect(obj.count).toBe(1);
-    expect(obj.add(5, 2)).toBe(7);
-    expect(obj.count).toBe(2);
+  test("background refresh", async () => {
+    // refresh in the background
+    m_add_pause_150.refresh(3, 4);
+    // should not be cashed yet
+    await expect(m_add_pause_150.has(3, 4)).resolves.toBe(false);
+    // no calls yet
+    expect(callCount).toBe(0);
+    await pause(100);
+    await expect(m_add_pause_150.has(4, 3)).resolves.toBe(true);
+    expect(callCount).toBe(1);
+    await pause(100);
+    await expect(m_add_pause_150.has(4, 3)).resolves.toBe(false);
+    await expect(m_add_pause_150(4, 3)).resolves.toBe(7);
+    expect(callCount).toBe(2);
   });
 });
 
-describe("Null & Undefined Cases", () => {
-  const UndefinedFunc = Memoize((key: string) => undefined, {
-    resolver: (key) => key,
+describe("null", () => {
+  const m_null = MemoizeRedis(async () => null, {
+    redisKey: "MemoizeRedisTestNull",
+    ttl: () => 1_000,
   });
 
-  const NullFunc = Memoize((key: string) => undefined, {
-    resolver: (key) => key,
-  });
-
-  it("Undefined", () => {
-    expect(UndefinedFunc.has("hello")).toBe(false);
-    expect(UndefinedFunc("hello")).toBe(undefined);
-    expect(UndefinedFunc.has("hello")).toBe(true);
-    expect(UndefinedFunc("hello")).toBe(undefined);
-  });
-
-  it("Null", () => {
-    expect(NullFunc.has("hello")).toBe(false);
-    expect(NullFunc("hello")).toBe(undefined);
-    expect(NullFunc.has("hello")).toBe(true);
-    expect(NullFunc("hello")).toBe(undefined);
-  });
-});
-
-describe("Object Reference", () => {
-  const a = { hello: "world" };
-
-  const funny = Memoize(() => a);
-
-  it("Null", () => {
-    expect(funny().hello).toBe("world");
-  });
-
-  it("Null", () => {
-    a.hello = "mars";
-    expect(funny().hello).toBe("mars");
-  });
-});
-
-describe("ShouldCache", () => {
-  const doNotCache = "do not cache";
-
-  const myFunction = Memoize((word: string) => word, {
-    shouldCache: (value) => value !== doNotCache,
-    resolver: (value) => value,
-  });
-
-  myFunction("hi");
-  myFunction(doNotCache);
-
-  it("should be cached", () => {
-    expect(myFunction.has("hi")).toBe(true);
-  });
-
-  it("should not be cached", () => {
-    expect(myFunction.has(doNotCache)).toBe(false);
-  });
-});
-
-describe("Do we need Memoize?", async () => {
-  const myFunction = Memoize(async (word: string) => word, {
-    resolver: (value) => value,
-  });
-
-  it("should be cached", async () => {
-    expect(await myFunction("hi")).toBe("hi");
-  });
-
-  it("should be cached", async () => {
-    expect(await myFunction("hi")).toBe("hi");
-  });
-
-  it("should be cached", async () => {
-    expect(await myFunction("hi2")).toBe("hi2");
-  });
-
-  it("size", () => expect(myFunction.cache.size).toBe(2));
-});
-
-describe("Errors", async () => {
-  const errorSync = Memoize(() => {
-    throw new Error("errorsync");
-  });
-
-  const errorASync = Memoize(async () => {
-    throw new Error("errorasync");
-  });
-
-  it("error sync", () => {
-    expect(() => errorSync()).toThrowError("errorsync");
-  });
-
-  it("error async", () => {
-    expect(errorASync()).rejects.toThrowError("errorasync");
-  });
-});
-
-describe("Cache deletion", () => {
-  const add = Memoize((a: number, b: number) => a + b);
-
-  it("CacheSize", () => {
-    expect(add.cache.size).toBe(0);
-
-    const value = add(1, 2);
-    expect(value).toBe(3);
-
-    expect(add.cache.size).toBe(1);
-
-    add.delete(1, 2);
-
-    expect(add.cache.size).toBe(0);
+  test("null", async () => {
+    expect(m_null()).resolves.toBe(null);
   });
 });

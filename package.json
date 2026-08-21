@@ -19,7 +19,6 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@chriscdn/promise-semaphore": "^4.0.0",
     "@chriscdn/type-guards": "^0.0.2"
   },
   "peerDependencies": {
@@ -31,7 +30,7 @@
     "redis": "^6.2.1",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "files": [
     "lib"
