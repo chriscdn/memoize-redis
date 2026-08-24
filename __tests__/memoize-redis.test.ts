@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { createRedisMemoizer } from "../src";
+import { canonicalize, createRedisMemoizer } from "../src";
 import { createClient } from "redis";
 
 const redis = createClient({ url: "redis://localhost:6379" });
@@ -110,5 +110,37 @@ describe("exception", () => {
 
   test("exception", async () => {
     await expect(m_exception()).rejects.toThrow("kaboom");
+  });
+});
+
+describe("hashing", () => {
+  const m_add_array = MemoizeRedis(
+    async ([a, b]: [a: number, b: number]) => a + b,
+    {
+      redisKey: "MemoizeHashingTest",
+      ttl: () => 1500,
+    },
+  );
+
+  const m_add_obj = MemoizeRedis(
+    async ({ a, b }: { a: number; b: number }) => a + b,
+    {
+      redisKey: "MemoizeHashingTest2",
+      ttl: () => 1500,
+    },
+  );
+
+  test("async", async () => {
+    await expect(m_add_obj({ a: 1, b: 2 })).resolves.toBe(3);
+    await expect(m_add_obj.has({ a: 1, b: 2 })).resolves.toBe(true);
+    await expect(m_add_obj.has({ b: 2, a: 1 })).resolves.toBe(true);
+  });
+});
+
+describe("canonicalize", () => {
+  test("primitives", () => {
+    expect(canonicalize(1)).toBe(JSON.stringify(1));
+    expect(canonicalize("1")).toBe(JSON.stringify("1"));
+    expect(canonicalize({ a: 1, b: 2 })).toBe(canonicalize({ b: 2, a: 1 }));
   });
 });

@@ -1,5 +1,6 @@
 import type { RedisClientType } from "redis";
 import { isDefined, isNumber, isUndefined } from "@chriscdn/type-guards";
+import { canonicalHash } from "./hash-utils";
 
 export type MemoizeAsyncRedisOptions<T extends unknown[], Return> = {
   redisClient: RedisClientType;
@@ -17,8 +18,7 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
 ) => {
   const { redisClient, redisKey, ttl } = options;
 
-  const resolver =
-    options.resolver ?? ((...args: Args) => JSON.stringify(args));
+  const resolver = options.resolver ?? ((...args: Args) => canonicalHash(args));
 
   const inFlight = new Map<string, Promise<Return>>();
 

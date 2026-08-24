@@ -1,3 +1,4 @@
+import canonicalize from "canonicalize";
 import { RedisClientType } from "redis";
 //#region src/memoize.d.ts
 type MemoizeAsyncRedisOptions<T extends unknown[], Return> = {
@@ -34,6 +35,10 @@ declare const MemoizeAsyncRedis: <Args extends unknown[], Return>(cb: (...args: 
 };
 declare const isMemoizedAsyncRedis: (value: unknown) => value is ReturnType<typeof MemoizeAsyncRedis>;
 //#endregion
+//#region src/hash-utils.d.ts
+declare const sha256: (value: string) => string;
+declare const canonicalHash: (value: unknown) => string;
+//#endregion
 //#region src/index.d.ts
 type Callback<Args extends unknown[], Return> = (...args: Args) => Promise<Return>;
 type Options<Args extends unknown[], Return> = Omit<MemoizeAsyncRedisOptions<Args, Return>, "redisClient">;
@@ -46,5 +51,5 @@ declare const createRedisMemoizer: (redisClient: RedisClientType) => <Args exten
   refresh: (...args: Args) => Promise<Return>;
 };
 //#endregion
-export { createRedisMemoizer, isMemoizedAsyncRedis };
+export { canonicalHash, canonicalize, createRedisMemoizer, isMemoizedAsyncRedis, sha256 };
 //# sourceMappingURL=index.d.mts.map

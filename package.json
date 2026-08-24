@@ -19,7 +19,9 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@chriscdn/type-guards": "^0.0.2"
+    "@chriscdn/type-guards": "^0.0.2",
+    "canonicalize": "^4.0.0",
+    "sha.js": "^2.4.12"
   },
   "peerDependencies": {
     "redis": "^6.0.0"
@@ -27,6 +29,7 @@
   "devDependencies": {
     "@tsconfig/strictest": "^2.0.8",
     "@types/node": "^26.2.0",
+    "@types/sha.js": "^2.4.4",
     "redis": "^6.2.1",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2",

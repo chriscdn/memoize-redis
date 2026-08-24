@@ -22,4 +22,5 @@ const createRedisMemoizer =
   ) =>
     MemoizeAsyncRedis(cb, { ...options, redisClient });
 
+export { canonicalize, canonicalHash, sha256 } from "./hash-utils";
 export { createRedisMemoizer, isMemoizedAsyncRedis };
