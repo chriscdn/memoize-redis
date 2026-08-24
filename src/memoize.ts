@@ -46,7 +46,9 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
 
       inFlight.set(skey, promise);
 
-      promise.finally(() => inFlight.delete(skey));
+      // The .catch() prevents an unhandled rejection from the promise created
+      // by .finally(). The original promise still propagates its rejection.
+      promise.finally(() => inFlight.delete(skey)).catch(() => null);
 
       return promise;
     }

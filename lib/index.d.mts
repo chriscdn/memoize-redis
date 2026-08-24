@@ -4,7 +4,6 @@ type MemoizeAsyncRedisOptions<T extends unknown[], Return> = {
   redisClient: RedisClientType;
   redisKey: string;
   ttl: (value: Return, key: string) => number;
-  shouldCache?: (value: Return, key: string) => boolean;
   resolver?: (...args: T) => string;
 };
 /**

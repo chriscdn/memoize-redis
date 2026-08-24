@@ -96,3 +96,19 @@ describe("null", () => {
     expect(m_null()).resolves.toBe(null);
   });
 });
+
+describe("exception", () => {
+  const m_exception = MemoizeRedis(
+    async () => {
+      throw new Error("kaboom");
+    },
+    {
+      redisKey: "MemoizeRedisTestException",
+      ttl: () => 1_000,
+    },
+  );
+
+  test("exception", async () => {
+    await expect(m_exception()).rejects.toThrow("kaboom");
+  });
+});
