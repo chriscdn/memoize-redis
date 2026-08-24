@@ -6,29 +6,24 @@ type MemoizeAsyncRedisOptions<T extends unknown[], Return> = {
   redisKey: string;
   ttl: (value: Return, key: string) => number;
   resolver?: (...args: T) => string;
+  refreshWhen?: (ttl: number, value: Return) => boolean;
 };
 /**
  * Memoize an asynchronous function.
  */
 declare const MemoizeAsyncRedis: <Args extends unknown[], Return>(cb: (...args: Args) => Promise<Return>, options: MemoizeAsyncRedisOptions<Args, Return>) => {
   (...args: Args): Promise<Return>;
-  clear: () => Promise<void>;
-  has: (...args: Args) => Promise<boolean | null>;
+  clear: () => Promise<number>;
+  has: (...args: Args) => Promise<boolean>;
   delete: (...args: Args) => Promise<void>;
   /**
-   * Returns the cache TTL in ms.
+   * Returns the cache TTL in milliseconds.
    *
-   * From redis documentation:
+   * Returns -2 if the field does not exist, or if the key does not exist.
+   * Returns -1 if the field exists but has no associated expiration.
+   * Returns the remaining TTL in milliseconds otherwise.
    *
-   * The command returns -2 if the key does not exist.
-   * The command returns -1 if the key exists but has no associated expire.
-   *
-   * We've added:
-   *
-   * The command returns -3 if redis is not available.
-   *
-   * @param args
-   * @returns
+   * Redis errors are propagated to the caller.
    */
   ttl: (...args: Args) => Promise<number>;
   refresh: (...args: Args) => Promise<Return>;
@@ -44,8 +39,8 @@ type Callback<Args extends unknown[], Return> = (...args: Args) => Promise<Retur
 type Options<Args extends unknown[], Return> = Omit<MemoizeAsyncRedisOptions<Args, Return>, "redisClient">;
 declare const createRedisMemoizer: (redisClient: RedisClientType) => <Args extends unknown[], Return>(cb: Callback<Args, Return>, options: Options<Args, Return>) => {
   (...args: Args): Promise<Return>;
-  clear: () => Promise<void>;
-  has: (...args: Args) => Promise<boolean | null>;
+  clear: () => Promise<number>;
+  has: (...args: Args) => Promise<boolean>;
   delete: (...args: Args) => Promise<void>;
   ttl: (...args: Args) => Promise<number>;
   refresh: (...args: Args) => Promise<Return>;

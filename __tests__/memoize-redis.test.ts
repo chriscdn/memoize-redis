@@ -23,11 +23,11 @@ describe("Memoization", () => {
   );
 
   test("redis-offline", async () => {
-    expect(m_add.ttl(1, 2)).resolves.toBe(-3);
+    await expect(m_add.ttl(1, 2)).rejects.toThrow("The client is closed");
     // with redis offline, it should still resolve
-    expect(callCount).toBe(0);
-    expect(m_add(1, 2)).resolves.toBe(3);
-    expect(callCount).toBe(1);
+    await expect(callCount).toBe(0);
+    await expect(m_add(1, 2)).resolves.toBe(3);
+    await expect(callCount).toBe(1);
   });
 
   test("addition", async () => {
@@ -114,13 +114,13 @@ describe("exception", () => {
 });
 
 describe("hashing", () => {
-  const m_add_array = MemoizeRedis(
-    async ([a, b]: [a: number, b: number]) => a + b,
-    {
-      redisKey: "MemoizeHashingTest",
-      ttl: () => 1500,
-    },
-  );
+  // const m_add_array = MemoizeRedis(
+  //   async ([a, b]: [a: number, b: number]) => a + b,
+  //   {
+  //     redisKey: "MemoizeHashingTest",
+  //     ttl: () => 1500,
+  //   },
+  // );
 
   const m_add_obj = MemoizeRedis(
     async ({ a, b }: { a: number; b: number }) => a + b,
@@ -142,5 +142,40 @@ describe("canonicalize", () => {
     expect(canonicalize(1)).toBe(JSON.stringify(1));
     expect(canonicalize("1")).toBe(JSON.stringify("1"));
     expect(canonicalize({ a: 1, b: 2 })).toBe(canonicalize({ b: 2, a: 1 }));
+  });
+});
+
+describe("background", () => {
+  let callCount = 0;
+
+  const m_add_bg = MemoizeRedis(
+    async (a: number, b: number) => {
+      callCount = callCount + 1;
+      return a + b;
+    },
+    {
+      redisKey: "MAddBg",
+      ttl: () => 100,
+      refreshWhen: (ttl) => {
+        console.log(`ttl: ${ttl}`);
+        return ttl < 20;
+      },
+    },
+  );
+
+  test("background test", async () => {
+    await expect(m_add_bg(1, 2)).resolves.toBe(3);
+    await expect(callCount).toBe(1);
+
+    await expect(m_add_bg(1, 2)).resolves.toBe(3);
+    await expect(callCount).toBe(1);
+
+    await pause(90);
+
+    await expect(m_add_bg(1, 2)).resolves.toBe(3);
+
+    await pause(1);
+
+    await expect(callCount).toBe(2);
   });
 });

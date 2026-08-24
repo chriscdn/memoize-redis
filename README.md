@@ -105,13 +105,35 @@ resolver: (...args) => `MyCacheKey::${args[0]}`,
 
 The resolver must return a string, which is used as the cache key.
 
+Add this section after `resolver` and before `Cache behavior`:
+
+### `refreshWhen` (optional)
+
+A function that determines whether a cached value should be refreshed in the background.
+
+The callback receives the remaining TTL in milliseconds and the cached value.
+
+```ts
+{
+refreshWhen: (ttl, value) => ttl < 10_000,
+}
+```
+
+If the callback returns `true`, the underlying function is executed in the background while the existing cached value is returned immediately.
+
+If another refresh or cache miss for the same key is already in progress, the existing in-flight request is reused.
+
+This can be used to refresh values before they expire without making callers wait for the underlying function.
+
+The refresh is best effort. Errors from the background refresh are ignored.
+
 ## Cache behavior
 
 - When the memoized function is called, it first checks Redis.
 - If a cached value exists, it is deserialized and returned without calling the original function.
 - If there is no cached value, the original function is called and its result may be cached according to `ttl`. Return `0` (or a negative number) from `ttl` to skip caching for that value.
 - If Redis is unavailable, the original function is called normally and the result is returned without caching.
-- If the resolved value is `undefined`, it is not cached, regardless of the value returned by `ttl`. A value of `null` is cached normally.
+- If the resolved value is `undefined`, a `TypeError` is thrown. A value of `null` is cached normally.
 
 ## In-flight request deduplication
 
@@ -145,6 +167,8 @@ Delete the Redis hash.
 await getUser.clear();
 ```
 
+Redis errors are propagated to the caller.
+
 ### `has(...args)`
 
 Checks whether a cache entry exists.
@@ -153,7 +177,9 @@ Checks whether a cache entry exists.
 const exists = await getUser.has("123");
 ```
 
-Returns `true` or `false` accordingly, or `null` if Redis is not available.
+Returns `true` or `false` accordingly.
+
+Redis errors are propagated to the caller.
 
 ### `delete(...args)`
 
@@ -162,6 +188,8 @@ Deletes a single cache entry.
 ```ts
 await getUser.delete("123");
 ```
+
+Redis errors are propagated to the caller.
 
 ### `ttl(...args)`
 
@@ -178,7 +206,8 @@ The return values are:
 | >=0   | entry TTL in milliseconds                                                  |
 | -1    | entry exists without an expiration (should never happen with this package) |
 | -2    | entry does not exist                                                       |
-| -3    | Redis is unavailable                                                       |
+
+Redis errors are propagated to the caller.
 
 ### `refresh(...args)`
 
@@ -210,17 +239,16 @@ This can be useful when working with dynamically configured functions.
 
 ## Redis availability
 
-The memoizer checks `redisClient.isReady` before performing cache operations.
+The memoized function is best effort when Redis is unavailable.
 
 When Redis is unavailable:
 
-- Cache reads are skipped
+- Cache reads are treated as cache misses
 - Cache writes are skipped
-- Cache deletion is skipped
-- Cache inspection returns null where applicable
 - The underlying function still executes
+- The underlying function's result is returned normally
 
-Redis connection errors are therefore not required for normal function execution to succeed.
+The explicit cache methods `clear`, `has`, `delete`, and `ttl` propagate Redis errors to the caller.
 
 The Redis client itself is responsible for establishing and maintaining its connection, including registering an `"error"` listener as shown in [Basic usage](#basic-usage).
 
