@@ -6,7 +6,7 @@ type MemoizeAsyncRedisOptions<T extends unknown[], Return> = {
   redisKey: string;
   ttl: (value: Return, key: string) => number;
   resolver?: (...args: T) => string;
-  refreshWhen?: (ttl: number, value: Return) => boolean;
+  refreshWhen?: (ttl: number, [...args]: T, value: Return) => boolean;
 };
 /**
  * Memoize an asynchronous function.

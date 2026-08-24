@@ -13,7 +13,7 @@ export type MemoizeAsyncRedisOptions<T extends unknown[], Return> = {
   redisKey: string;
   ttl: (value: Return, key: string) => number;
   resolver?: (...args: T) => string;
-  refreshWhen?: (ttl: number, value: Return) => boolean;
+  refreshWhen?: (ttl: number, [...args]: T, value: Return) => boolean;
 };
 
 /**
@@ -94,7 +94,7 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
 
       const ttl = Array.isArray(_ttl) ? _ttl[0] : null;
 
-      if (isNumber(ttl) && refreshWhen(ttl, value)) {
+      if (isNumber(ttl) && refreshWhen(ttl, args, value)) {
         // this runs in the background, so we catch and bury any errors
         _fetchAndCache(skey, args).catch(() => null);
       }

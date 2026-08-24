@@ -115,7 +115,7 @@ The callback receives the remaining TTL in milliseconds and the cached value.
 
 ```ts
 {
-refreshWhen: (ttl, value) => ttl < 10_000,
+refreshWhen: (ttl, args, value) => ttl < 10_000,
 }
 ```
 
