@@ -1,6 +1,6 @@
 # @chriscdn/memoize-redis
 
-A small utility for memoizing asynchronous functions using Redis hashes.
+A utility for memoizing asynchronous functions using Redis hashes.
 
 It provides:
 
