@@ -1,6 +1,6 @@
 # @chriscdn/memoize-redis
 
-A small TypeScript utility for memoizing asynchronous functions using Redis hashes.
+A small utility for memoizing asynchronous functions using Redis hashes.
 
 It provides:
 
@@ -19,7 +19,7 @@ It provides:
 npm install @chriscdn/memoize-redis
 ```
 
-The package has a peer dependency on [`redis`](https://www.npmjs.com/package/redis) package v6 or greater.
+The package has a peer dependency on [`redis`](https://www.npmjs.com/package/redis) package v6 or greater, so be sure to install that as well.
 
 ## Basic usage
 
@@ -68,8 +68,6 @@ The Redis hash used to store the cached values.
   redisKey: "users";
 }
 ```
-
-Different memoized functions can use different Redis keys.
 
 ### `ttl` (required)
 
