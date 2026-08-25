@@ -17,10 +17,17 @@ type MemoizeRedisEvent<Args extends unknown[], Return> = {
   value: Return;
   durationMs: number;
 } | {
+  type: "background-refresh";
+  args: Args;
+  key: string;
+} | {
   type: "error";
   args?: Args;
   key?: string;
   error: {
+    type: "refresh";
+    error: unknown;
+  } | {
     type: "redis-offline";
   } | {
     type: "redis-error";

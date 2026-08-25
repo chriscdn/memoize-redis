@@ -23,7 +23,7 @@ describe("Memoization", () => {
   );
 
   test("redis-offline", async () => {
-    await expect(m_add.ttl(1, 2)).rejects.toThrow("The client is closed");
+    await expect(m_add.ttl(1, 2)).resolves.toBe(-3);
     // with redis offline, it should still resolve
     await expect(callCount).toBe(0);
     await expect(m_add(1, 2)).resolves.toBe(3);

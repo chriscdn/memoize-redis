@@ -28,10 +28,19 @@ export type MemoizeRedisEvent<Args extends unknown[], Return> =
       durationMs: number;
     }
   | {
+      type: "background-refresh";
+      args: Args;
+      key: string;
+    }
+  | {
       type: "error";
       args?: Args;
       key?: string;
       error:
+        | {
+            type: "refresh";
+            error: unknown;
+          }
         | {
             type: "redis-offline";
           }
@@ -228,8 +237,23 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
       const ttl = Array.isArray(_ttl) ? _ttl[0] : null;
 
       if (isNumber(ttl) && refreshWhen(ttl, args, value)) {
-        // this runs in the background, so we catch and bury any errors
-        fetchAndCache(skey, args).catch(() => null);
+        onEvent({
+          type: "background-refresh",
+          args,
+          key: skey,
+        });
+
+        fetchAndCache(skey, args).catch((e) => {
+          onEvent({
+            type: "error",
+            args,
+            key: skey,
+            error: {
+              type: "refresh",
+              error: e,
+            },
+          });
+        });
       }
     }
 
