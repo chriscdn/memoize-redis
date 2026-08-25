@@ -8,12 +8,60 @@ import {
 } from "@chriscdn/type-guards";
 import { canonicalHash } from "./hash-utils";
 
-export type MemoizeAsyncRedisOptions<T extends unknown[], Return> = {
+export type MemoizeRedisEvent<Args extends unknown[], Return> =
+  | {
+      type: "hit";
+      args: Args;
+      key: string;
+      value: Return;
+    }
+  | {
+      type: "miss";
+      args: Args;
+      key: string;
+    }
+  | {
+      type: "fetch";
+      args: Args;
+      key: string;
+      value: Return;
+      durationMs: number;
+    }
+  | {
+      type: "error";
+      args?: Args;
+      key?: string;
+      error:
+        | {
+            type: "redis-offline";
+          }
+        | {
+            type: "redis-error";
+            error: unknown;
+          }
+        | {
+            type: "stringify";
+            value: unknown;
+            error: unknown;
+          }
+        | {
+            type: "parse";
+            value: unknown;
+            error: unknown;
+          }
+        | {
+            type: "undefined";
+            reason: string;
+          };
+    };
+
+export type MemoizeAsyncRedisOptions<Args extends unknown[], Return> = {
   redisClient: RedisClientType;
   redisKey: string;
   ttl: (value: Return, key: string) => number;
-  resolver?: (...args: T) => string;
-  refreshWhen?: (ttl: number, [...args]: T, value: Return) => boolean;
+  resolver?: (...args: Args) => string;
+  refreshWhen?: (ttl: number, [...args]: Args, value: Return) => boolean;
+  onEvent?: (event: MemoizeRedisEvent<Args, Return>) => void;
 };
 
 /**
@@ -27,30 +75,103 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
 
   const resolver = options.resolver ?? ((...args: Args) => canonicalHash(args));
   const refreshWhen = options.refreshWhen ?? (() => false);
+  const onEvent = options.onEvent ?? (() => undefined);
 
   const inFlight = new Map<string, Promise<Return>>();
 
-  const _fetchAndCache = (skey: string, args: Args): Promise<Return> => {
+  const withRedis = async <T>(
+    fn: (redis: RedisClientType) => Promise<T>,
+  ): Promise<T | null> => {
+    if (redisClient.isReady) {
+      try {
+        return await fn(redisClient);
+      } catch (e) {
+        onEvent({ type: "error", error: { type: "redis-error", error: e } });
+        return null;
+      }
+    } else {
+      onEvent({ type: "error", error: { type: "redis-offline" } });
+      return null;
+    }
+  };
+
+  const queueRedis = async <T>(
+    fn: (redis: RedisClientType) => Promise<T>,
+  ): Promise<T | null> => {
+    try {
+      return await fn(redisClient);
+    } catch (e) {
+      onEvent({ type: "error", error: { type: "redis-error", error: e } });
+      return null;
+    }
+  };
+
+  const stringify = (value: unknown, args: Args, skey: string) => {
+    try {
+      return JSON.stringify(value);
+    } catch (e) {
+      onEvent({
+        type: "error",
+        args,
+        key: skey,
+        error: {
+          type: "stringify",
+          value,
+          error: e,
+        },
+      });
+
+      return null;
+    }
+  };
+
+  const fetchAndCache = (skey: string, args: Args): Promise<Return> => {
     const existing = inFlight.get(skey);
 
     if (isDefined(existing)) {
       return existing;
     } else {
       const promise = (async () => {
+        const t0 = performance.now();
+
         const value = await cb(...args);
 
+        onEvent({
+          type: "fetch",
+          args,
+          key: skey,
+          value,
+          durationMs: performance.now() - t0,
+        });
+
         if (isUndefined(value)) {
-          throw new TypeError("Memoized function returned undefined");
+          onEvent({
+            type: "error",
+            args,
+            key: skey,
+            error: {
+              type: "undefined",
+              reason:
+                "Memoized function returned undefined and will not be cached in redis.",
+            },
+          });
+
+          return value;
         } else {
           const _ttl = ttl(value, skey);
 
           if (_ttl > 0) {
-            await redisClient
-              .multi()
-              .hSet(redisKey, skey, JSON.stringify(value))
-              .hpExpire(redisKey, skey, _ttl)
-              .exec()
-              .catch(() => null);
+            const serialized = stringify(value, args, skey);
+
+            if (isString(serialized)) {
+              await withRedis((redis) =>
+                redis
+                  .multi()
+                  .hSet(redisKey, skey, serialized)
+                  .hpExpire(redisKey, skey, _ttl)
+                  .exec(),
+              );
+            }
           }
 
           return value;
@@ -72,20 +193,32 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
 
     let value: Return | undefined;
 
-    const [_value, _ttl] = await redisClient
-      .multi()
-      .hGet(redisKey, skey)
-      .hpTTL(redisKey, skey)
-      .exec()
-      .catch(() => [null, null]);
+    const [_value, _ttl] =
+      (await withRedis((redis) =>
+        redis.multi().hGet(redisKey, skey).hpTTL(redisKey, skey).exec(),
+      )) ?? [];
 
     if (isString(_value)) {
       try {
-        // now what?
         value = JSON.parse(_value) as Return;
-      } catch {
-        await redisClient.hDel(redisKey, skey).catch(() => null);
+        onEvent({
+          type: "hit",
+          value,
+          args,
+          key: skey,
+        });
+      } catch (e) {
+        onEvent({
+          type: "error",
+          args,
+          key: skey,
+          error: { type: "parse", value: _value, error: e },
+        });
+
+        await withRedis((redis) => redis.hDel(redisKey, skey));
       }
+    } else {
+      onEvent({ type: "miss", args, key: skey });
     }
 
     if (isDefinedOrNull(value)) {
@@ -96,49 +229,51 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
 
       if (isNumber(ttl) && refreshWhen(ttl, args, value)) {
         // this runs in the background, so we catch and bury any errors
-        _fetchAndCache(skey, args).catch(() => null);
+        fetchAndCache(skey, args).catch(() => null);
       }
     }
 
     if (isUndefined(value)) {
-      value = await _fetchAndCache(skey, args);
+      value = await fetchAndCache(skey, args);
     }
 
     return value;
   };
 
-  memoizedFunction.clear = async () => await redisClient.del(redisKey);
+  memoizedFunction.clear = async () =>
+    await queueRedis((redis) => redis.del(redisKey));
 
   memoizedFunction.has = async (...args: Args) => {
     const skey = resolver(...args);
-    return Boolean(await redisClient.hExists(redisKey, skey));
+    const has = await withRedis((redis) => redis.hExists(redisKey, skey));
+    return isNumber(has) ? Boolean(has) : null;
   };
 
   memoizedFunction.delete = async (...args: Args) => {
     const skey = resolver(...args);
-    await redisClient.hDel(redisKey, skey);
+    await queueRedis((redis) => redis.hDel(redisKey, skey));
   };
 
   /**
    * Returns the cache TTL in milliseconds.
    *
+   * Returns -3 if redis is not available or a redis error occurred.
    * Returns -2 if the field does not exist, or if the key does not exist.
    * Returns -1 if the field exists but has no associated expiration.
    * Returns the remaining TTL in milliseconds otherwise.
-   *
-   * Redis errors are propagated to the caller.
    */
   memoizedFunction.ttl = async (...args: Args) => {
     const skey = resolver(...args);
 
-    const ttls = (await redisClient.hpTTL(redisKey, [skey])) ?? [];
+    const ttls =
+      (await withRedis((redis) => redis.hpTTL(redisKey, [skey]))) ?? [];
 
-    return isNumber(ttls[0]) ? ttls[0] : -1;
+    return isNumber(ttls[0]) ? ttls[0] : -3;
   };
 
   memoizedFunction.refresh = async (...args: Args) => {
     const skey = resolver(...args);
-    return await _fetchAndCache(skey, args);
+    return await fetchAndCache(skey, args);
   };
 
   return memoizedFunction;

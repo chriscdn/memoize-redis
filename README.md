@@ -34,8 +34,11 @@ const redisClient = createClient({
 });
 
 // Attach an error listener before connecting. The redis client emits
+
 // an "error" event on connection issues, and Node will crash on an
+
 // unhandled "error" event if no listener is registered.
+
 redisClient.on("error", (error) => {
   console.error("Redis error", error);
 });
@@ -105,8 +108,6 @@ resolver: (...args) => `MyCacheKey::${args[0]}`,
 
 The resolver must return a string, which is used as the cache key.
 
-Add this section after `resolver` and before `Cache behavior`:
-
 ### `refreshWhen` (optional)
 
 A function that determines whether a cached value should be refreshed in the background.
@@ -115,15 +116,15 @@ The callback receives the remaining TTL in milliseconds and the cached value.
 
 ```ts
 {
-refreshWhen: (ttl, args, value) => ttl < 10_000,
+  refreshWhen: (ttl, args, value) => ttl < 10_000,
 }
 ```
 
-If the callback returns `true`, the underlying function is executed in the background while the existing cached value is returned immediately.
+If the callback returns true, the underlying function is executed in the background.
 
-If another refresh or cache miss for the same key is already in progress, the existing in-flight request is reused.
+The existing cached value continues to be returned until the refresh completes, so callers do not wait for the underlying function.
 
-This can be used to refresh values before they expire without making callers wait for the underlying function.
+Only one refresh is executed at a time for each cache key. A refresh already in progress is reused by subsequent refresh attempts.
 
 The refresh is best effort. Errors from the background refresh are ignored.
 
@@ -133,7 +134,7 @@ The refresh is best effort. Errors from the background refresh are ignored.
 - If a cached value exists, it is deserialized and returned without calling the original function.
 - If there is no cached value, the original function is called and its result may be cached according to `ttl`. Return `0` (or a negative number) from `ttl` to skip caching for that value.
 - If Redis is unavailable, the original function is called normally and the result is returned without caching.
-- If the resolved value is `undefined`, a `TypeError` is thrown. A value of `null` is cached normally.
+- If the resolved value is `undefined`, it is not cached. A value of `null` is cached normally.
 
 ## In-flight request deduplication
 
@@ -167,7 +168,7 @@ Delete the Redis hash.
 await getUser.clear();
 ```
 
-Redis errors are propagated to the caller.
+The operation can be queued by the Redis client if Redis is unavailable. The returned promise can be awaited to wait for completion, or the method can be called without `await` for a background operation.
 
 ### `has(...args)`
 
@@ -179,7 +180,7 @@ const exists = await getUser.has("123");
 
 Returns `true` or `false` accordingly.
 
-Redis errors are propagated to the caller.
+Returns `null` if Redis is unavailable or a Redis error occurs.
 
 ### `delete(...args)`
 
@@ -189,7 +190,7 @@ Deletes a single cache entry.
 await getUser.delete("123");
 ```
 
-Redis errors are propagated to the caller.
+The operation can be queued by the Redis client if Redis is unavailable. The returned promise can be awaited to wait for completion, or the method can be called without `await` for a background operation.
 
 ### `ttl(...args)`
 
@@ -206,8 +207,7 @@ The return values are:
 | >=0   | entry TTL in milliseconds                                                  |
 | -1    | entry exists without an expiration (should never happen with this package) |
 | -2    | entry does not exist                                                       |
-
-Redis errors are propagated to the caller.
+| -3    | Redis is unavailable or a Redis error occurred                             |
 
 ### `refresh(...args)`
 
@@ -248,7 +248,9 @@ When Redis is unavailable:
 - The underlying function still executes
 - The underlying function's result is returned normally
 
-The explicit cache methods `clear`, `has`, `delete`, and `ttl` propagate Redis errors to the caller.
+The methods `clear` and `delete` are sent to Redis even when the client is offline and can be queued by the Redis client until the connection is restored.
+
+The methods `has` and `ttl` return `null` or `-3` respectively when Redis is unavailable or a Redis error occurs.
 
 The Redis client itself is responsible for establishing and maintaining its connection, including registering an `"error"` listener as shown in [Basic usage](#basic-usage).
 

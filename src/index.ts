@@ -3,6 +3,7 @@ import {
   isMemoizedAsyncRedis,
   MemoizeAsyncRedis,
   MemoizeAsyncRedisOptions,
+  MemoizeRedisEvent,
 } from "./memoize";
 
 type Callback<Args extends unknown[], Return> = (
@@ -23,4 +24,4 @@ const createRedisMemoizer =
     MemoizeAsyncRedis(cb, { ...options, redisClient });
 
 export { canonicalize, canonicalHash, sha256 } from "./hash-utils";
-export { createRedisMemoizer, isMemoizedAsyncRedis };
+export { createRedisMemoizer, isMemoizedAsyncRedis, type MemoizeRedisEvent };
