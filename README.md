@@ -27,7 +27,10 @@ Create a memoizer from an existing Redis client:
 
 ```ts
 import { createClient } from "redis";
-import { createRedisMemoizer } from "@chriscdn/memoize-redis";
+import {
+  createRedisMemoizer,
+  createRedisMemoizerNoHash,
+} from "@chriscdn/memoize-redis";
 
 const redisClient = createClient({
   url: process.env.REDIS_URL,
@@ -59,6 +62,8 @@ const getUser = memoize(
 
 const user = await getUser("123");
 ```
+
+Use `createRedisMemoizerNoHash` if using a version of Redis prior to 7.4, which does not support the required hash commands.
 
 ## Options
 
@@ -160,13 +165,13 @@ This deduplication is local to the current process. It does not provide distribu
 
 The memoized function provides several additional methods.
 
-### `clear()`
+<!-- ### `clear()`
 
 Delete the Redis hash.
 
 ```ts
 await getUser.clear();
-```
+``` -->
 
 The operation can be queued by the Redis client if Redis is unavailable. The returned promise can be awaited to wait for completion, or the method can be called without `await` for a background operation.
 
@@ -231,7 +236,7 @@ The package exports `isMemoizedAsyncRedis`:
 import { isMemoizedAsyncRedis } from "@chriscdn/memoize-redis";
 
 if (isMemoizedAsyncRedis(value)) {
-  await value.clear();
+  await value.has(key, field);
 }
 ```
 

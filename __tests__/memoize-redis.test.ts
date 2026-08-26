@@ -1,9 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { canonicalize, createRedisMemoizer } from "../src";
+import { canonicalize, createRedisMemoizerNoHash } from "../src";
 import { createClient } from "redis";
 
 const redis = createClient({ url: "redis://localhost:6379" });
-const MemoizeRedis = createRedisMemoizer(redis);
+
+const MemoizeRedis = createRedisMemoizerNoHash(redis);
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -38,12 +39,12 @@ describe("Memoization", () => {
     await expect(m_add.has(2, 1)).resolves.toBe(false);
   });
 
-  test("clear", async () => {
-    await expect(m_add(1, 2)).resolves.toBe(3);
-    await expect(m_add.has(2, 1)).resolves.toBe(true);
-    await m_add.clear();
-    await expect(m_add.has(2, 1)).resolves.toBe(false);
-  });
+  // test("clear", async () => {
+  //   await expect(m_add(1, 2)).resolves.toBe(3);
+  //   await expect(m_add.has(2, 1)).resolves.toBe(true);
+  //   await m_add.clear();
+  //   await expect(m_add.has(2, 1)).resolves.toBe(false);
+  // });
 
   test("ttl & delete", async () => {
     await expect(m_add(1, 2)).resolves.toBe(3);
@@ -93,7 +94,7 @@ describe("null", () => {
   });
 
   test("null", async () => {
-    expect(m_null()).resolves.toBe(null);
+    await expect(m_null()).resolves.toBe(null);
   });
 });
 
@@ -155,23 +156,25 @@ describe("background", () => {
     },
     {
       redisKey: "MAddBg",
-      ttl: () => 100,
+      ttl: () => 1000,
       refreshWhen: (ttl) => {
-        console.log(`ttl: ${ttl}`);
-        return ttl < 20;
+        return ttl < 200;
       },
     },
   );
 
   test("background test", async () => {
+    // initial call, should fire
     await expect(m_add_bg(1, 2)).resolves.toBe(3);
     await expect(callCount).toBe(1);
 
+    // should fetch cached result
     await expect(m_add_bg(1, 2)).resolves.toBe(3);
     await expect(callCount).toBe(1);
 
-    await pause(90);
+    await pause(900);
 
+    // the idea here is to trigger a bg refresh
     await expect(m_add_bg(1, 2)).resolves.toBe(3);
 
     await pause(1);

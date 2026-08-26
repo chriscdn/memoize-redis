@@ -5,6 +5,7 @@ import {
   MemoizeAsyncRedisOptions,
   MemoizeRedisEvent,
 } from "./memoize";
+import { RedisAdapter, RedisAdapterNoHash } from "./redis-adapters";
 
 type Callback<Args extends unknown[], Return> = (
   ...args: Args
@@ -12,7 +13,7 @@ type Callback<Args extends unknown[], Return> = (
 
 type Options<Args extends unknown[], Return> = Omit<
   MemoizeAsyncRedisOptions<Args, Return>,
-  "redisClient"
+  "redisAdapter"
 >;
 
 const createRedisMemoizer =
@@ -20,8 +21,32 @@ const createRedisMemoizer =
   <Args extends unknown[], Return>(
     cb: Callback<Args, Return>,
     options: Options<Args, Return>,
-  ) =>
-    MemoizeAsyncRedis(cb, { ...options, redisClient });
+  ) => {
+    const redisAdapter = new RedisAdapter(redisClient);
+    return MemoizeAsyncRedis(cb, { ...options, redisAdapter });
+  };
+
+/**
+ * Use this if on Redis < 7.4
+ *
+ * @param redisClient
+ * @returns
+ */
+const createRedisMemoizerNoHash =
+  (redisClient: RedisClientType) =>
+  <Args extends unknown[], Return>(
+    cb: Callback<Args, Return>,
+    options: Options<Args, Return>,
+  ) => {
+    const redisAdapter = new RedisAdapterNoHash(redisClient);
+    return MemoizeAsyncRedis(cb, { ...options, redisAdapter });
+  };
 
 export { canonicalize, canonicalHash, sha256 } from "./hash-utils";
-export { createRedisMemoizer, isMemoizedAsyncRedis, type MemoizeRedisEvent };
+
+export {
+  createRedisMemoizer,
+  isMemoizedAsyncRedis,
+  createRedisMemoizerNoHash,
+  type MemoizeRedisEvent,
+};

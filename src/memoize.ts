@@ -1,5 +1,5 @@
-import type { RedisClientType } from "redis";
 import {
+  isBoolean,
   isDefined,
   isDefinedOrNull,
   isNumber,
@@ -7,6 +7,7 @@ import {
   isUndefined,
 } from "@chriscdn/type-guards";
 import { canonicalHash } from "./hash-utils";
+import { RedisAdapter } from "./redis-adapters";
 
 export type MemoizeRedisEvent<Args extends unknown[], Return> =
   | {
@@ -65,7 +66,7 @@ export type MemoizeRedisEvent<Args extends unknown[], Return> =
     };
 
 export type MemoizeAsyncRedisOptions<Args extends unknown[], Return> = {
-  redisClient: RedisClientType;
+  redisAdapter: RedisAdapter;
   redisKey: string;
   ttl: (value: Return, key: string) => number;
   resolver?: (...args: Args) => string;
@@ -80,7 +81,7 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
   cb: (...args: Args) => Promise<Return>,
   options: MemoizeAsyncRedisOptions<Args, Return>,
 ) => {
-  const { redisClient, redisKey, ttl } = options;
+  const { redisAdapter, redisKey, ttl } = options;
 
   const resolver = options.resolver ?? ((...args: Args) => canonicalHash(args));
   const refreshWhen = options.refreshWhen ?? (() => false);
@@ -89,11 +90,11 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
   const inFlight = new Map<string, Promise<Return>>();
 
   const withRedis = async <T>(
-    fn: (redis: RedisClientType) => Promise<T>,
+    fn: (redis: RedisAdapter) => Promise<T>,
   ): Promise<T | null> => {
-    if (redisClient.isReady) {
+    if (redisAdapter.isReady) {
       try {
-        return await fn(redisClient);
+        return await fn(redisAdapter);
       } catch (e) {
         onEvent({ type: "error", error: { type: "redis-error", error: e } });
         return null;
@@ -105,10 +106,10 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
   };
 
   const queueRedis = async <T>(
-    fn: (redis: RedisClientType) => Promise<T>,
+    fn: (redis: RedisAdapter) => Promise<T>,
   ): Promise<T | null> => {
     try {
-      return await fn(redisClient);
+      return await fn(redisAdapter);
     } catch (e) {
       onEvent({ type: "error", error: { type: "redis-error", error: e } });
       return null;
@@ -174,11 +175,12 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
 
             if (isString(serialized)) {
               await withRedis((redis) =>
-                redis
-                  .multi()
-                  .hSet(redisKey, skey, serialized)
-                  .hpExpire(redisKey, skey, _ttl)
-                  .exec(),
+                redis.set({
+                  hash: redisKey,
+                  field: skey,
+                  value: serialized,
+                  ttl: _ttl,
+                }),
               );
             }
           }
@@ -204,7 +206,10 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
 
     const [_value, _ttl] =
       (await withRedis((redis) =>
-        redis.multi().hGet(redisKey, skey).hpTTL(redisKey, skey).exec(),
+        redis.get({
+          hash: redisKey,
+          field: skey,
+        }),
       )) ?? [];
 
     if (isString(_value)) {
@@ -224,7 +229,12 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
           error: { type: "parse", value: _value, error: e },
         });
 
-        await withRedis((redis) => redis.hDel(redisKey, skey));
+        await withRedis((redis) =>
+          redis.del({
+            hash: redisKey,
+            field: skey,
+          }),
+        );
       }
     } else {
       onEvent({ type: "miss", args, key: skey });
@@ -234,9 +244,7 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
       // This means we got a value from the cache. We now ask refreshWhen if we
       // should refresh in the background
 
-      const ttl = Array.isArray(_ttl) ? _ttl[0] : null;
-
-      if (isNumber(ttl) && refreshWhen(ttl, args, value)) {
+      if (isNumber(_ttl) && refreshWhen(_ttl, args, value)) {
         onEvent({
           type: "background-refresh",
           args,
@@ -264,18 +272,20 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
     return value;
   };
 
-  memoizedFunction.clear = async () =>
-    await queueRedis((redis) => redis.del(redisKey));
+  // memoizedFunction.clear = async () =>
+  //   await queueRedis((redis) => redis.del(redisKey));
 
   memoizedFunction.has = async (...args: Args) => {
     const skey = resolver(...args);
-    const has = await withRedis((redis) => redis.hExists(redisKey, skey));
-    return isNumber(has) ? Boolean(has) : null;
+    const has = await withRedis((redis) =>
+      redis.exists({ hash: redisKey, field: skey }),
+    );
+    return isBoolean(has) ? Boolean(has) : null;
   };
 
   memoizedFunction.delete = async (...args: Args) => {
     const skey = resolver(...args);
-    await queueRedis((redis) => redis.hDel(redisKey, skey));
+    await queueRedis((redis) => redis.del({ hash: redisKey, field: skey }));
   };
 
   /**
@@ -289,10 +299,11 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
   memoizedFunction.ttl = async (...args: Args) => {
     const skey = resolver(...args);
 
-    const ttls =
-      (await withRedis((redis) => redis.hpTTL(redisKey, [skey]))) ?? [];
+    const _ttl = await withRedis((redis) =>
+      redis.ttl({ hash: redisKey, field: skey }),
+    );
 
-    return isNumber(ttls[0]) ? ttls[0] : -3;
+    return _ttl ?? -3;
   };
 
   memoizedFunction.refresh = async (...args: Args) => {
