@@ -17,12 +17,12 @@ type Options<Args extends unknown[], Return> = Omit<
 >;
 
 const createRedisMemoizer =
-  (redisClient: RedisClientType) =>
+  (redisClient: RedisClientType, namespace: string) =>
   <Args extends unknown[], Return>(
     cb: Callback<Args, Return>,
     options: Options<Args, Return>,
   ) => {
-    const redisAdapter = new RedisAdapter(redisClient);
+    const redisAdapter = new RedisAdapter(redisClient, namespace);
     return MemoizeAsyncRedis(cb, { ...options, redisAdapter });
   };
 
@@ -33,12 +33,12 @@ const createRedisMemoizer =
  * @returns
  */
 const createRedisMemoizerNoHash =
-  (redisClient: RedisClientType) =>
+  (redisClient: RedisClientType, namespace: string) =>
   <Args extends unknown[], Return>(
     cb: Callback<Args, Return>,
     options: Options<Args, Return>,
   ) => {
-    const redisAdapter = new RedisAdapterNoHash(redisClient);
+    const redisAdapter = new RedisAdapterNoHash(redisClient, namespace);
     return MemoizeAsyncRedis(cb, { ...options, redisAdapter });
   };
 

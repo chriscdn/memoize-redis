@@ -3,8 +3,10 @@ import { RedisClientType } from "redis";
 //#region src/redis-adapters.d.ts
 declare class RedisAdapter {
   protected redis: RedisClientType;
-  constructor(redis: RedisClientType);
+  protected namespace: string;
+  constructor(redis: RedisClientType, namespace: string);
   get isReady(): boolean;
+  hashify(hash: string): string;
   set({ hash, field, value, ttl }: {
     hash: string;
     field: string;
@@ -19,6 +21,9 @@ declare class RedisAdapter {
     hash: string;
     field: string;
   }): Promise<number>;
+  clear({ hash }: {
+    hash: string;
+  }): Promise<void>;
   exists({ hash, field }: {
     hash: string;
     field: string;
@@ -87,6 +92,7 @@ type MemoizeAsyncRedisOptions<Args extends unknown[], Return> = {
  */
 declare const MemoizeAsyncRedis: <Args extends unknown[], Return>(cb: (...args: Args) => Promise<Return>, options: MemoizeAsyncRedisOptions<Args, Return>) => {
   (...args: Args): Promise<Return>;
+  clear: () => Promise<void | null>;
   has: (...args: Args) => Promise<boolean | null>;
   delete: (...args: Args) => Promise<void>;
   /**
@@ -109,8 +115,9 @@ declare const canonicalHash: (value: unknown) => string;
 //#region src/index.d.ts
 type Callback<Args extends unknown[], Return> = (...args: Args) => Promise<Return>;
 type Options<Args extends unknown[], Return> = Omit<MemoizeAsyncRedisOptions<Args, Return>, "redisAdapter">;
-declare const createRedisMemoizer: (redisClient: RedisClientType) => <Args extends unknown[], Return>(cb: Callback<Args, Return>, options: Options<Args, Return>) => {
+declare const createRedisMemoizer: (redisClient: RedisClientType, namespace: string) => <Args extends unknown[], Return>(cb: Callback<Args, Return>, options: Options<Args, Return>) => {
   (...args: Args): Promise<Return>;
+  clear: () => Promise<void | null>;
   has: (...args: Args) => Promise<boolean | null>;
   delete: (...args: Args) => Promise<void>;
   ttl: (...args: Args) => Promise<number>;
@@ -122,8 +129,9 @@ declare const createRedisMemoizer: (redisClient: RedisClientType) => <Args exten
  * @param redisClient
  * @returns
  */
-declare const createRedisMemoizerNoHash: (redisClient: RedisClientType) => <Args extends unknown[], Return>(cb: Callback<Args, Return>, options: Options<Args, Return>) => {
+declare const createRedisMemoizerNoHash: (redisClient: RedisClientType, namespace: string) => <Args extends unknown[], Return>(cb: Callback<Args, Return>, options: Options<Args, Return>) => {
   (...args: Args): Promise<Return>;
+  clear: () => Promise<void | null>;
   has: (...args: Args) => Promise<boolean | null>;
   delete: (...args: Args) => Promise<void>;
   ttl: (...args: Args) => Promise<number>;

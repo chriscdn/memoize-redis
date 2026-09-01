@@ -2,10 +2,17 @@ import { isNumber, isString } from "@chriscdn/type-guards";
 import type { RedisClientType } from "redis";
 
 class RedisAdapter {
-  constructor(protected redis: RedisClientType) {}
+  constructor(
+    protected redis: RedisClientType,
+    protected namespace: string,
+  ) {}
 
   get isReady() {
     return this.redis.isReady;
+  }
+
+  hashify(hash: string) {
+    return `${this.namespace}:::${hash}`;
   }
 
   async set({
@@ -21,16 +28,16 @@ class RedisAdapter {
   }) {
     await this.redis
       .multi()
-      .hSet(hash, field, value)
-      .hpExpire(hash, field, ttl)
+      .hSet(this.hashify(hash), field, value)
+      .hpExpire(this.hashify(hash), field, ttl)
       .exec();
   }
 
   async get({ hash, field }: { hash: string; field: string }) {
     const [value, _ttl] = await this.redis
       .multi()
-      .hGet(hash, field)
-      .hpTTL(hash, field)
+      .hGet(this.hashify(hash), field)
+      .hpTTL(this.hashify(hash), field)
       .exec();
 
     const ttl = Array.isArray(_ttl) ? _ttl[0] : null;
@@ -43,27 +50,26 @@ class RedisAdapter {
   }
 
   del({ hash, field }: { hash: string; field: string }) {
-    return this.redis.hDel(hash, field);
+    return this.redis.hDel(this.hashify(hash), field);
   }
 
-  // redis doesn't have a way to clear the entire hash. You need to iterate it.. tbd
-  // clear({ hash }: { hash: string }) {
-  //   return
-  // }
+  async clear({ hash }: { hash: string }) {
+    await this.redis.del(this.hashify(hash));
+  }
 
   async exists({ hash, field }: { hash: string; field: string }) {
-    return Boolean(await this.redis.hExists(hash, field));
+    return Boolean(await this.redis.hExists(this.hashify(hash), field));
   }
 
   async ttl({ hash, field }: { hash: string; field: string }) {
-    const ttls = await this.redis.hpTTL(hash, field);
+    const ttls = await this.redis.hpTTL(this.hashify(hash), field);
     return Array.isArray(ttls) && isNumber(ttls[0]) ? ttls[0] : null;
   }
 }
 
 class RedisAdapterNoHash extends RedisAdapter {
   keyify(hash: string, field: string) {
-    return `${hash}:::${field}`;
+    return `${this.namespace}:::${hash}:::${field}`;
   }
 
   override async set({
@@ -102,10 +108,16 @@ class RedisAdapterNoHash extends RedisAdapter {
     return this.redis.del(this.keyify(hash, field));
   }
 
-  // redis doesn't have a way to clear the entire hash. You need to iterate it.. tbd
-  // clear({ hash }: { hash: string }) {
-  //   return
-  // }
+  override async clear({ hash }: { hash: string }) {
+    for await (const keys of this.redis.scanIterator({
+      MATCH: this.keyify(hash, "*"),
+      COUNT: 1_000,
+    })) {
+      if (keys.length) {
+        await this.redis.unlink(keys);
+      }
+    }
+  }
 
   override async exists({ hash, field }: { hash: string; field: string }) {
     return Boolean(await this.redis.exists(this.keyify(hash, field)));

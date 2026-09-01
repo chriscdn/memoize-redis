@@ -165,13 +165,13 @@ This deduplication is local to the current process. It does not provide distribu
 
 The memoized function provides several additional methods.
 
-<!-- ### `clear()`
+### `clear()`
 
 Delete the Redis hash.
 
 ```ts
 await getUser.clear();
-``` -->
+```
 
 The operation can be queued by the Redis client if Redis is unavailable. The returned promise can be awaited to wait for completion, or the method can be called without `await` for a background operation.
 

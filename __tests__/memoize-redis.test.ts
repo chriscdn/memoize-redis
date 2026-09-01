@@ -4,7 +4,7 @@ import { createClient } from "redis";
 
 const redis = createClient({ url: "redis://localhost:6379" });
 
-const MemoizeRedis = createRedisMemoizerNoHash(redis);
+const MemoizeRedis = createRedisMemoizerNoHash(redis, "YO");
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -180,5 +180,21 @@ describe("background", () => {
     await pause(1);
 
     await expect(callCount).toBe(2);
+  });
+});
+
+describe("clear", async () => {
+  const addClear = MemoizeRedis(async (a: number, b: number) => a + b, {
+    redisKey: "ClearTEST",
+    ttl: () => 60_000, //minute
+  });
+
+  test("clear1", async () => {
+    await addClear.clear();
+    await expect(addClear.has(1, 2)).resolves.toBe(false);
+    await addClear(1, 2);
+    await expect(addClear.has(1, 2)).resolves.toBe(true);
+    await addClear.clear();
+    await expect(addClear.has(1, 2)).resolves.toBe(false);
   });
 });

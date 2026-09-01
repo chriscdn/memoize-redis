@@ -240,29 +240,28 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
       onEvent({ type: "miss", args, key: skey });
     }
 
-    if (isDefinedOrNull(value)) {
-      // This means we got a value from the cache. We now ask refreshWhen if we
-      // should refresh in the background
+    if (
+      isDefinedOrNull(value) &&
+      isNumber(_ttl) &&
+      refreshWhen(_ttl, args, value)
+    ) {
+      onEvent({
+        type: "background-refresh",
+        args,
+        key: skey,
+      });
 
-      if (isNumber(_ttl) && refreshWhen(_ttl, args, value)) {
+      fetchAndCache(skey, args).catch((e) => {
         onEvent({
-          type: "background-refresh",
+          type: "error",
           args,
           key: skey,
+          error: {
+            type: "refresh",
+            error: e,
+          },
         });
-
-        fetchAndCache(skey, args).catch((e) => {
-          onEvent({
-            type: "error",
-            args,
-            key: skey,
-            error: {
-              type: "refresh",
-              error: e,
-            },
-          });
-        });
-      }
+      });
     }
 
     if (isUndefined(value)) {
@@ -272,8 +271,8 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
     return value;
   };
 
-  // memoizedFunction.clear = async () =>
-  //   await queueRedis((redis) => redis.del(redisKey));
+  memoizedFunction.clear = async () =>
+    await queueRedis((redis) => redis.clear({ hash: redisKey }));
 
   memoizedFunction.has = async (...args: Args) => {
     const skey = resolver(...args);
