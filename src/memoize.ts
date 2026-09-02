@@ -287,6 +287,24 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
     await queueRedis((redis) => redis.del({ hash: redisKey, field: skey }));
   };
 
+  memoizedFunction.set = async (args: Args, value: Return) => {
+    const skey = resolver(...args);
+
+    const serialized = stringify(value, args, skey);
+    const _ttl = ttl(value, skey);
+
+    if (isString(serialized)) {
+      await withRedis((redis) =>
+        redis.set({
+          hash: redisKey,
+          field: skey,
+          value: serialized,
+          ttl: _ttl,
+        }),
+      );
+    }
+  };
+
   /**
    * Returns the cache TTL in milliseconds.
    *

@@ -95,6 +95,7 @@ declare const MemoizeAsyncRedis: <Args extends unknown[], Return>(cb: (...args: 
   clear: () => Promise<void | null>;
   has: (...args: Args) => Promise<boolean | null>;
   delete: (...args: Args) => Promise<void>;
+  set: (args: Args, value: Return) => Promise<void>;
   /**
    * Returns the cache TTL in milliseconds.
    *
@@ -120,6 +121,7 @@ declare const createRedisMemoizer: (redisClient: RedisClientType, namespace: str
   clear: () => Promise<void | null>;
   has: (...args: Args) => Promise<boolean | null>;
   delete: (...args: Args) => Promise<void>;
+  set: (args: Args, value: Return) => Promise<void>;
   ttl: (...args: Args) => Promise<number>;
   refresh: (...args: Args) => Promise<Return>;
 };
@@ -134,6 +136,7 @@ declare const createRedisMemoizerNoHash: (redisClient: RedisClientType, namespac
   clear: () => Promise<void | null>;
   has: (...args: Args) => Promise<boolean | null>;
   delete: (...args: Args) => Promise<void>;
+  set: (args: Args, value: Return) => Promise<void>;
   ttl: (...args: Args) => Promise<number>;
   refresh: (...args: Args) => Promise<Return>;
 };
