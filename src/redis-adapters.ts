@@ -65,11 +65,23 @@ class RedisAdapter {
     const ttls = await this.redis.hpTTL(this.hashify(hash), field);
     return Array.isArray(ttls) && isNumber(ttls[0]) ? ttls[0] : null;
   }
+
+  async clearNamespace() {
+    for await (const keys of this.redis.scanIterator({
+      MATCH: this.hashify("*"),
+      COUNT: 1_000,
+    })) {
+      if (keys.length) {
+        await this.redis.unlink(keys);
+      }
+    }
+  }
 }
 
 class RedisAdapterNoHash extends RedisAdapter {
   keyify(hash: string, field: string) {
-    return `${this.namespace}:::${hash}:::${field}`;
+    // return `${this.namespace}:::${hash}:::${field}`;
+    return this.hashify(`${hash}:::${field}`);
   }
 
   override async set({

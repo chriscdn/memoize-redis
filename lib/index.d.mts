@@ -32,6 +32,7 @@ declare class RedisAdapter {
     hash: string;
     field: string;
   }): Promise<number | null>;
+  clearNamespace(): Promise<void>;
 }
 //#endregion
 //#region src/memoize.d.ts
@@ -116,14 +117,17 @@ declare const canonicalHash: (value: unknown) => string;
 //#region src/index.d.ts
 type Callback<Args extends unknown[], Return> = (...args: Args) => Promise<Return>;
 type Options<Args extends unknown[], Return> = Omit<MemoizeAsyncRedisOptions<Args, Return>, "redisAdapter">;
-declare const createRedisMemoizer: (redisClient: RedisClientType, namespace: string) => <Args extends unknown[], Return>(cb: Callback<Args, Return>, options: Options<Args, Return>) => {
-  (...args: Args): Promise<Return>;
-  clear: () => Promise<void | null>;
-  has: (...args: Args) => Promise<boolean | null>;
-  delete: (...args: Args) => Promise<void>;
-  set: (args: Args, value: Return) => Promise<void>;
-  ttl: (...args: Args) => Promise<number>;
-  refresh: (...args: Args) => Promise<Return>;
+declare const createRedisMemoizer: (redisClient: RedisClientType, namespace: string) => {
+  clearNamespace: () => Promise<void>;
+  MemoizeRedis: <Args extends unknown[], Return>(cb: Callback<Args, Return>, options: Options<Args, Return>) => {
+    (...args: Args): Promise<Return>;
+    clear: () => Promise<void | null>;
+    has: (...args: Args) => Promise<boolean | null>;
+    delete: (...args: Args) => Promise<void>;
+    set: (args: Args, value: Return) => Promise<void>;
+    ttl: (...args: Args) => Promise<number>;
+    refresh: (...args: Args) => Promise<Return>;
+  };
 };
 /**
  * Use this if on Redis < 7.4
@@ -131,14 +135,17 @@ declare const createRedisMemoizer: (redisClient: RedisClientType, namespace: str
  * @param redisClient
  * @returns
  */
-declare const createRedisMemoizerNoHash: (redisClient: RedisClientType, namespace: string) => <Args extends unknown[], Return>(cb: Callback<Args, Return>, options: Options<Args, Return>) => {
-  (...args: Args): Promise<Return>;
-  clear: () => Promise<void | null>;
-  has: (...args: Args) => Promise<boolean | null>;
-  delete: (...args: Args) => Promise<void>;
-  set: (args: Args, value: Return) => Promise<void>;
-  ttl: (...args: Args) => Promise<number>;
-  refresh: (...args: Args) => Promise<Return>;
+declare const createRedisMemoizerNoHash: (redisClient: RedisClientType, namespace: string) => {
+  clearNamespace: () => Promise<void>;
+  MemoizeRedis: <Args extends unknown[], Return>(cb: Callback<Args, Return>, options: Options<Args, Return>) => {
+    (...args: Args): Promise<Return>;
+    clear: () => Promise<void | null>;
+    has: (...args: Args) => Promise<boolean | null>;
+    delete: (...args: Args) => Promise<void>;
+    set: (args: Args, value: Return) => Promise<void>;
+    ttl: (...args: Args) => Promise<number>;
+    refresh: (...args: Args) => Promise<Return>;
+  };
 };
 //#endregion
 export { type MemoizeRedisEvent, canonicalHash, canonicalize, createRedisMemoizer, createRedisMemoizerNoHash, isMemoizedAsyncRedis, sha256 };

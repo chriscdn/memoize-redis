@@ -48,9 +48,9 @@ redisClient.on("error", (error) => {
 
 await redisClient.connect();
 
-const memoize = createRedisMemoizer(redisClient);
+const { MemoizeRedis } = createRedisMemoizer(redisClient);
 
-const getUser = memoize(
+const getUser = MemoizeRedis(
   async (id: string) => {
     return fetchUserFromDatabase(id);
   },
@@ -172,8 +172,6 @@ Delete the Redis hash.
 ```ts
 await getUser.clear();
 ```
-
-The operation can be queued by the Redis client if Redis is unavailable. The returned promise can be awaited to wait for completion, or the method can be called without `await` for a background operation.
 
 ### `has(...args)`
 

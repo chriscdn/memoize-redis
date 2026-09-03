@@ -16,15 +16,24 @@ type Options<Args extends unknown[], Return> = Omit<
   "redisAdapter"
 >;
 
-const createRedisMemoizer =
-  (redisClient: RedisClientType, namespace: string) =>
-  <Args extends unknown[], Return>(
-    cb: Callback<Args, Return>,
-    options: Options<Args, Return>,
-  ) => {
-    const redisAdapter = new RedisAdapter(redisClient, namespace);
-    return MemoizeAsyncRedis(cb, { ...options, redisAdapter });
+const createRedisMemoizer = (
+  redisClient: RedisClientType,
+  namespace: string,
+) => {
+  const redisAdapter = new RedisAdapter(redisClient, namespace);
+
+  return {
+    clearNamespace: () => redisAdapter.clearNamespace(),
+    MemoizeRedis: <Args extends unknown[], Return>(
+      cb: Callback<Args, Return>,
+      options: Options<Args, Return>,
+    ) =>
+      MemoizeAsyncRedis(cb, {
+        ...options,
+        redisAdapter,
+      }),
   };
+};
 
 /**
  * Use this if on Redis < 7.4
@@ -32,15 +41,25 @@ const createRedisMemoizer =
  * @param redisClient
  * @returns
  */
-const createRedisMemoizerNoHash =
-  (redisClient: RedisClientType, namespace: string) =>
-  <Args extends unknown[], Return>(
-    cb: Callback<Args, Return>,
-    options: Options<Args, Return>,
-  ) => {
-    const redisAdapter = new RedisAdapterNoHash(redisClient, namespace);
-    return MemoizeAsyncRedis(cb, { ...options, redisAdapter });
+
+const createRedisMemoizerNoHash = (
+  redisClient: RedisClientType,
+  namespace: string,
+) => {
+  const redisAdapter = new RedisAdapterNoHash(redisClient, namespace);
+
+  return {
+    clearNamespace: () => redisAdapter.clearNamespace(),
+    MemoizeRedis: <Args extends unknown[], Return>(
+      cb: Callback<Args, Return>,
+      options: Options<Args, Return>,
+    ) =>
+      MemoizeAsyncRedis(cb, {
+        ...options,
+        redisAdapter,
+      }),
   };
+};
 
 export { canonicalize, canonicalHash, sha256 } from "./hash-utils";
 

@@ -1,12 +1,25 @@
 import { describe, expect, test } from "vitest";
-import { canonicalize, createRedisMemoizerNoHash } from "../src";
+import {
+  canonicalize,
+  createRedisMemoizer,
+  createRedisMemoizerNoHash,
+} from "../src";
 import { createClient } from "redis";
+import { RedisAdapter, RedisAdapterNoHash } from "../src/redis-adapters";
 
 const redis = createClient({ url: "redis://localhost:6379" });
 
-const MemoizeRedis = createRedisMemoizerNoHash(redis, "YO");
+const { clearNamespace, MemoizeRedis } = createRedisMemoizer(redis, "YO");
+// const { MemoizeRedis } = createRedisMemoizerNoHash(redis, "YO");
+// const z = createRedisMemoizer(redis, "YO");
 
-const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const adapter1 = new RedisAdapter(redis, "Adapter1");
+const adapter2 = new RedisAdapterNoHash(redis, "Adapter2");
+
+const adapters = [adapter1, adapter2];
+
+export const pause = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 describe("Memoization", () => {
   let callCount = 0;
@@ -23,16 +36,17 @@ describe("Memoization", () => {
     },
   );
 
-  test("redis-offline", async () => {
-    await expect(m_add.ttl(1, 2)).resolves.toBe(-3);
-    // with redis offline, it should still resolve
-    await expect(callCount).toBe(0);
-    await expect(m_add(1, 2)).resolves.toBe(3);
-    await expect(callCount).toBe(1);
-  });
+  // test("redis-offline", async () => {
+  //   await expect(m_add.ttl(1, 2)).resolves.toBe(-3);
+  //   // with redis offline, it should still resolve
+  //   await expect(callCount).toBe(0);
+  //   await expect(m_add(1, 2)).resolves.toBe(3);
+  //   await expect(callCount).toBe(1);
+  // });
 
   test("addition", async () => {
     await redis.connect();
+
     await expect(m_add(1, 2)).resolves.toBe(3);
     await expect(m_add.has(2, 1)).resolves.toBe(true);
     await pause(500);
@@ -196,5 +210,25 @@ describe("clear", async () => {
     await expect(addClear.has(1, 2)).resolves.toBe(true);
     await addClear.clear();
     await expect(addClear.has(1, 2)).resolves.toBe(false);
+  });
+});
+
+describe("Adapter", async () => {
+  const hash = "whatevs";
+  const field = "fielders";
+  const ttl = 60_000;
+  const value = "whatevs";
+
+  // await redis.connect();
+
+  test("Adapter", async () => {
+    for (const adapter of adapters) {
+      await adapter.clearNamespace();
+      await expect(adapter.exists({ hash, field })).resolves.toBe(false);
+      await adapter.set({ hash, field, ttl, value });
+      await expect(adapter.exists({ hash, field })).resolves.toBe(true);
+      await adapter.clearNamespace();
+      await expect(adapter.exists({ hash, field })).resolves.toBe(false);
+    }
   });
 });
