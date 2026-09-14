@@ -4,9 +4,9 @@ import {
   createRedisMemoizer,
   createRedisMemoizerNoHash,
 } from "../src";
-import { createClient } from "redis";
-import { RedisAdapter, RedisAdapterNoHash } from "../src/redis-adapters";
 
+import { RedisAdapter, RedisAdapterNoHash } from "../src/redis-adapters";
+import { createClient } from "redis";
 const redis = createClient({ url: "redis://localhost:6379" });
 
 const { clearNamespace, MemoizeRedis } = createRedisMemoizer(redis, "YO");
