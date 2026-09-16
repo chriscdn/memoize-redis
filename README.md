@@ -56,7 +56,7 @@ const getUser = MemoizeRedis(
   },
   {
     redisKey: "users",
-    ttl: (user) => 60_000,
+    ttl: ({ key, value, args }) => 60_000,
   },
 );
 
@@ -85,7 +85,7 @@ The value is specified in milliseconds.
 
 ```ts
 {
-  ttl: (value, key) => 60_000;
+  ttl: ({ key, value, args }) => 60_000;
 }
 ```
 
@@ -95,7 +95,7 @@ This also makes it possible to calculate the TTL from the returned value:
 
 ```ts
 {
-  ttl: (value) => value.expiresAt - Date.now();
+  ttl: ({ key, value, args }) => value.expiresAt - Date.now();
 }
 ```
 
@@ -121,7 +121,7 @@ The callback receives the remaining TTL in milliseconds and the cached value.
 
 ```ts
 {
-  refreshWhen: (ttl, args, value) => ttl < 10_000,
+  refreshWhen: ({ttl, value, args}) => ttl < 10_000,
 }
 ```
 

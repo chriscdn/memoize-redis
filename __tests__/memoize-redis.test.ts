@@ -171,7 +171,7 @@ describe("background", () => {
     {
       redisKey: "MAddBg",
       ttl: () => 1000,
-      refreshWhen: (ttl) => {
+      refreshWhen: ({ ttl }) => {
         return ttl < 200;
       },
     },

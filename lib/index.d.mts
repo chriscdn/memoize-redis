@@ -83,9 +83,17 @@ type MemoizeRedisEvent<Args extends unknown[], Return> = {
 type MemoizeAsyncRedisOptions<Args extends unknown[], Return> = {
   redisAdapter: RedisAdapter;
   redisKey: string;
-  ttl: (value: Return, key: string) => number;
+  ttl: ({ key, value, args }: {
+    key: string;
+    value: Return;
+    args: Args;
+  }) => number;
+  refreshWhen?: ({ ttl, args, value }: {
+    ttl: number;
+    args: Args;
+    value: Return;
+  }) => boolean;
   resolver?: (...args: Args) => string;
-  refreshWhen?: (ttl: number, [...args]: Args, value: Return) => boolean;
   onEvent?: (event: MemoizeRedisEvent<Args, Return>) => void;
 };
 /**

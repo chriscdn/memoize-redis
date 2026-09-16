@@ -68,9 +68,29 @@ export type MemoizeRedisEvent<Args extends unknown[], Return> =
 export type MemoizeAsyncRedisOptions<Args extends unknown[], Return> = {
   redisAdapter: RedisAdapter;
   redisKey: string;
-  ttl: (value: Return, key: string) => number;
+
+  ttl: ({
+    key,
+    value,
+    args,
+  }: {
+    key: string;
+    value: Return;
+    args: Args;
+  }) => number;
+
+  refreshWhen?: ({
+    ttl,
+    args,
+    value,
+  }: {
+    ttl: number;
+    args: Args;
+    value: Return;
+  }) => boolean;
+
   resolver?: (...args: Args) => string;
-  refreshWhen?: (ttl: number, [...args]: Args, value: Return) => boolean;
+
   onEvent?: (event: MemoizeRedisEvent<Args, Return>) => void;
 };
 
@@ -168,7 +188,7 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
 
           return value;
         } else {
-          const _ttl = ttl(value, skey);
+          const _ttl = ttl({ value, key: skey, args });
 
           if (_ttl > 0) {
             const serialized = stringify(value, args, skey);
@@ -243,7 +263,7 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
     if (
       isDefinedOrNull(value) &&
       isNumber(_ttl) &&
-      refreshWhen(_ttl, args, value)
+      refreshWhen({ ttl: _ttl, args, value })
     ) {
       onEvent({
         type: "background-refresh",
@@ -291,7 +311,7 @@ const MemoizeAsyncRedis = <Args extends unknown[], Return>(
     const skey = resolver(...args);
 
     const serialized = stringify(value, args, skey);
-    const _ttl = ttl(value, skey);
+    const _ttl = ttl({ value, key: skey, args });
 
     if (isString(serialized)) {
       await withRedis((redis) =>
