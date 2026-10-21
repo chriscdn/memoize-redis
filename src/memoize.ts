@@ -99,7 +99,7 @@ export type MemoizeAsyncRedisOptions<Args extends unknown[], Return> = {
  */
 const MemoizeAsyncRedis = <Args extends unknown[], Return>(
   cb: (...args: Args) => Promise<Return>,
-  options: MemoizeAsyncRedisOptions<Args, Return>,
+  options: MemoizeAsyncRedisOptions<NoInfer<Args>, NoInfer<Return>>,
 ) => {
   const { redisAdapter, redisKey, ttl } = options;
 

@@ -99,7 +99,7 @@ type MemoizeAsyncRedisOptions<Args extends unknown[], Return> = {
 /**
  * Memoize an asynchronous function.
  */
-declare const MemoizeAsyncRedis: <Args extends unknown[], Return>(cb: (...args: Args) => Promise<Return>, options: MemoizeAsyncRedisOptions<Args, Return>) => {
+declare const MemoizeAsyncRedis: <Args extends unknown[], Return>(cb: (...args: Args) => Promise<Return>, options: MemoizeAsyncRedisOptions<NoInfer<Args>, NoInfer<Return>>) => {
   (...args: Args): Promise<Return>;
   clear: () => Promise<void | null>;
   has: (...args: Args) => Promise<boolean | null>;

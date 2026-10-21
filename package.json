@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@chriscdn/type-guards": "^0.0.3",
-    "canonicalize": "^5.0.0",
+    "canonicalize": "^5.1.0",
     "sha.js": "^2.4.12"
   },
   "peerDependencies": {
@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "@tsconfig/strictest": "^2.0.8",
-    "@types/node": "^26.5.1",
+    "@types/node": "^26.6.2",
     "@types/sha.js": "^2.4.4",
     "redis": "^6.2.1",
     "tsdown": "^0.23.0",
